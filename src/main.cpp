@@ -175,7 +175,7 @@ void setup() {
     
     Serial.println("System started");
 
-    grid = readLookupTable("/output.csv");
+    grid = readLookupTable("/output1.csv");
 
     Serial.printf("Read %d points from lookup table\n", grid.points.size() * grid.points[0].size());
 
@@ -216,6 +216,6 @@ void loop() {
   Serial.print(mappedPoint.mappedX, 2);  // print with 2 decimal places
   Serial.print(", ");
   Serial.println(-1*mappedPoint.mappedY, 2);  // print with 2 decimal places
-  delay(80);
+  delay(20);
 }
 
