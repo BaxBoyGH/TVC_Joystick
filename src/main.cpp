@@ -218,4 +218,3 @@ void loop() {
   Serial.println(-1*mappedPoint.mappedY, 2);  // print with 2 decimal places
   delay(20);
 }
-
