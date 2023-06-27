@@ -175,7 +175,7 @@ void setup() {
     
     Serial.println("System started");
 
-    grid = readLookupTable("/data.csv");
+    grid = readLookupTable("/output.csv");
 
     Serial.printf("Read %d points from lookup table\n", grid.points.size() * grid.points[0].size());
 
@@ -205,8 +205,8 @@ void loop() {
   Point mappedPoint = findMapping(grid, calibratedX, calibratedY);
   //Serial.printf("Mapped coordinates: %.6f, %.6f\n", mappedPoint.mappedX, mappedPoint.mappedY);
 
-  servo_a.write(mappedPoint.mappedY);   
-  servo_b.write(-1*mappedPoint.mappedX-180);
+  servo_a.write(-1*mappedPoint.mappedY+15);   
+  servo_b.write(mappedPoint.mappedX-25);
 
    // print data to Serial Monitor on Arduino IDE
   Serial.print(calibratedX, 2);  // print with 2 decimal places
@@ -215,7 +215,7 @@ void loop() {
   Serial.print(",");
   Serial.print(mappedPoint.mappedX, 2);  // print with 2 decimal places
   Serial.print(", ");
-  Serial.println(mappedPoint.mappedY, 2);  // print with 2 decimal places
-  delay(100);
+  Serial.println(-1*mappedPoint.mappedY, 2);  // print with 2 decimal places
+  delay(80);
 }
 
