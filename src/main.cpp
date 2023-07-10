@@ -16,9 +16,6 @@
 Servo servo_a;
 Servo servo_b;
 
-
-void listDir(fs::FS &fs, const char *dirname, uint8_t levels = 0);
-
 #define VRX_PIN 34 // ESP32 pin GIOP36 (ADC0) connected to VRX pin
 #define VRY_PIN 35 // ESP32 pin GIOP39 (ADC0) connected to VRY pin
 
@@ -36,80 +33,6 @@ struct Point {
     double mappedY;
 };
 
-struct Grid {
-    double minX, minY, xSpacing, ySpacing;
-    std::vector<std::vector<Point>> points;
-};
-
-Grid readLookupTable(const char* filename) {
-    Grid grid;
-    if (!SPIFFS.begin()) {
-        Serial.println("Failed to mount file system");
-        return grid;
-    }
-
-    File file = SPIFFS.open(filename, "r");
-    if (!file) {
-        Serial.println("Unable to open file");
-        return grid;
-    }
-
-    double previousX, previousY;
-    int rowIndex = 0, colIndex = 0;
-
-    while (file.available()) {
-        String line = file.readStringUntil('\n');
-        Point point;
-        sscanf(line.c_str(), "%lf,%lf,%lf,%lf", &point.x, &point.y, &point.mappedX, &point.mappedY);
-
-        // determine grid properties
-        if (grid.points.empty()) {
-            grid.minX = point.x;
-            grid.minY = point.y;
-            grid.points.push_back(std::vector<Point>(1, point));
-        } else {
-            if (point.y == previousY) {
-                grid.points.back().push_back(point);
-                if (colIndex != 0) {
-                    grid.xSpacing = point.x - previousX;
-                }
-            } else {
-                grid.points.push_back(std::vector<Point>(1, point));
-                if (rowIndex != 0) {
-                    grid.ySpacing = point.y - previousY;
-                }
-                rowIndex++;
-                colIndex = 0;
-            }
-        }
-
-        previousX = point.x;
-        previousY = point.y;
-        colIndex++;
-    }
-
-    file.close();
-    return grid;
-}
-
-Point findMapping(const Grid& grid, double x, double y) {
-    double xFraction = (x - grid.minX) / grid.xSpacing;
-    double yFraction = (y - grid.minY) / grid.ySpacing;
-
-    //Serial.printf("xFraction: %f, yFraction: %f, xSpacing: %f, ySpacing: %f\n", 
-    //              xFraction, yFraction, grid.xSpacing, grid.ySpacing);
-
-    int xIndex = round(xFraction);
-    int yIndex = round(yFraction);
-
-    if (yIndex >= 0 && yIndex < grid.points.size() && 
-        xIndex >= 0 && xIndex < grid.points[yIndex].size()) {
-        return grid.points[yIndex][xIndex];
-    } else {
-        //Serial.printf("Index out of range. xIndex: %d, yIndex: %d\n", xIndex, yIndex);
-        return {0.0, 0.0, 0.0, 0.0}; // Default return value
-    }
-}
 
 void calibrateJoystick() {
   Serial.println("Please keep the joystick still for 5 seconds");
@@ -149,35 +72,41 @@ void calibrateJoystick() {
 float mapFloat(float x, float in_min, float in_max, float out_min, float out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
-void setupSPIFFS() {
-  if (!SPIFFS.begin()) {
-    Serial.println("An error occurred while mounting SPIFFS");
-    while (1)
-      ;
-  }
+
+
+float alpha(float x, float y){
+
+  return 35.001549 + 0.3863021839 * y + -4.4780694041 * x + 0.0649899492* y*y + 0.0111596275* x * y + -0.0397865873* x*x + -0.0002537119* y*y*y + 0.0032481368* x * y*y + 0.0018342949* x*x* y + -0.0073124944* x*x*x
+              + -0.0000181577* y*y*y*y + -0.0000579877* x * y*y*y + 0.0003515851* x*x* y*y + 0.0001120064* x*x*x* y + -0.0003305037* x*x*x*x;
 }
 
-Grid grid;
+float beta(float x, float y){
+  return -44.99245505923736 + -3.8951056064 * y + 0.9343299164 * x + 0.0261465955* y*y + -0.0372285176* x * y + -0.0563875585* x*x
+        + -0.0055439795* y*y*y + 0.0046142001* x * y*y + 0.0014686303* x*x* y + -0.0006782020* x*x*x
+        + 0.0003026989* y*y*y*y + -0.0003695765* x * y*y*y + -0.0001385496* x*x* y*y + 0.0001411509* x*x*x* y + -0.0000004344* x*x*x*x;
+}
+
 
 void setup() {
     Serial.begin(9600);
     delay(10);
-    setupSPIFFS();
+    //setupSPIFFS();
 
     calibrateJoystick();
 
     servo_a.attach(13);
     servo_b.attach(12);
     delay(1000);
-    servo_a.write(90);
-    servo_b.write(90);
+    servo_a.write(35);
+    servo_b.write(180-45);
     Serial.println("Servos set to  \n");
     
     Serial.println("System started");
 
-    grid = readLookupTable("/output1.csv");
+    //grid = readLookupTable("/output1.csv");
 
-    Serial.printf("Read %d points from lookup table\n", grid.points.size() * grid.points[0].size());
+    //Serial.printf("Read %d points from lookup table\n", grid.points.size() * grid.points[0].size());
+
 
 } 
 
@@ -202,19 +131,16 @@ void loop() {
     calibratedY = mapFloat(valueY, minY, neutralY, -7.5, 0);
   }
 
-  Point mappedPoint = findMapping(grid, calibratedX, calibratedY);
-  //Serial.printf("Mapped coordinates: %.6f, %.6f\n", mappedPoint.mappedX, mappedPoint.mappedY);
-
-  servo_a.write(-1*mappedPoint.mappedY+15);   
-  servo_b.write(mappedPoint.mappedX-25);
+  servo_a.write(alpha(calibratedX, calibratedY));   
+  servo_b.write(180+beta(calibratedX, calibratedY));
 
    // print data to Serial Monitor on Arduino IDE
   Serial.print(calibratedX, 2);  // print with 2 decimal places
   Serial.print(", ");
   Serial.print(calibratedY, 2);  // print with 2 decimal places
   Serial.print(",");
-  Serial.print(mappedPoint.mappedX, 2);  // print with 2 decimal places
+  Serial.print(alpha(calibratedX, calibratedY), 2);  // print with 2 decimal places
   Serial.print(", ");
-  Serial.println(-1*mappedPoint.mappedY, 2);  // print with 2 decimal places
-  delay(20);
+  Serial.println(-1*beta(calibratedX, calibratedY), 2);  // print with 2 decimal places
+  delay(50);
 }
