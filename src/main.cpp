@@ -12,6 +12,7 @@
 #include <string>
 #include <cmath>
 #include <servo.h>
+#include <ArduinoEigenDense.h>
 
 Servo servo_a;
 Servo servo_b;
@@ -73,24 +74,70 @@ float mapFloat(float x, float in_min, float in_max, float out_min, float out_max
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
+//Angles calculated using parameters and alpha beta func
 
-float alpha(float x, float y){
+// Adjusted parameters for alpha function
+Eigen::Vector3f a_0(-25, -5, 45);
+Eigen::Vector3f g_a(10, -5, 75);
+float l_a = 11.0;
+float c_a = 48.42;
+bool sign_a = true;
 
-  return 35.001549 + 0.3863021839 * y + -4.4780694041 * x + 0.0649899492* y*y + 0.0111596275* x * y + -0.0397865873* x*x + -0.0002537119* y*y*y + 0.0032481368* x * y*y + 0.0018342949* x*x* y + -0.0073124944* x*x*x
-              + -0.0000181577* y*y*y*y + -0.0000579877* x * y*y*y + 0.0003515851* x*x* y*y + 0.0001120064* x*x*x* y + -0.0003305037* x*x*x*x;
+// Adjusted parameters for beta function
+Eigen::Vector3f b_0(-10, -25, 45);
+Eigen::Vector3f g_b(-10, 10, 110);
+float l_b = 11.0;
+float c_b = 77.7;
+bool sign_b = true;
+
+Eigen::Matrix3f calculate_R(float psi, float phi) {
+    psi = psi * M_PI / 180.0; // convert to radians
+    phi = phi * M_PI / 180.0; // convert to radians
+
+    Eigen::Matrix3f R;
+    R << cos(psi), 0, sin(psi),
+         sin(phi) * sin(psi), cos(phi), -sin(phi) * cos(psi),
+         -sin(psi) * cos(phi), sin(phi), cos(psi) * cos(phi);
+    return R;
 }
 
-float beta(float x, float y){
-  return -44.99245505923736 + -3.8951056064 * y + 0.9343299164 * x + 0.0261465955* y*y + -0.0372285176* x * y + -0.0563875585* x*x
-        + -0.0055439795* y*y*y + 0.0046142001* x * y*y + 0.0014686303* x*x* y + -0.0006782020* x*x*x
-        + 0.0003026989* y*y*y*y + -0.0003695765* x * y*y*y + -0.0001385496* x*x* y*y + 0.0001411509* x*x*x* y + -0.0000004344* x*x*x*x;
+float alpha(float psi, float phi, const Eigen::Matrix3f& R) {
+    Eigen::Vector3f x = (R * a_0 - g_a) / l_a;
+    float z = (x.norm() * x.norm() + 1 - (c_a / l_a) * (c_a / l_a)) / 2;
+    int pm = sign_a ? 1 : -1;
+    float denominator = z + x[2];
+    if (denominator == 0) { // avoid division by zero
+        std::cout << "Denominator in alpha calculation is zero!" << std::endl;
+        return std::nan("");
+    }
+    float sqrt_val = x[0] * x[0] + x[2] * x[2] - z * z;
+    if (sqrt_val < 0) { // check if value inside sqrt is negative
+        std::cout << "Negative value inside sqrt in alpha calculation!" << std::endl;
+        return std::nan("");
+    }
+    return -2 * atan((x[0] + pm * sqrt(sqrt_val)) / denominator) * 180.0 / M_PI; // convert result from radians to degrees
 }
 
+float beta(float psi, float phi, const Eigen::Matrix3f& R) {
+    Eigen::Vector3f x = (R * b_0 - g_b) / l_b;
+    float z = (x.norm() * x.norm() + 1 - (c_b / l_b) * (c_b / l_b)) / 2;
+    int pm = sign_b ? 1 : -1;
+    float denominator = z + x[2];
+    if (denominator == 0) { // avoid division by zero
+        std::cout << "Denominator in beta calculation is zero!" << std::endl;
+        return std::nan("");
+    }
+    float sqrt_val = x[1] * x[1] + x[2] * x[2] - z * z;
+    if (sqrt_val < 0) { // check if value inside sqrt is negative
+        std::cout << "Negative value inside sqrt in beta calculation!" << std::endl;
+        return std::nan("");
+    }
+    return 2 * atan((x[1] + pm * sqrt(sqrt_val)) / denominator) * 180.0 / M_PI; // convert result from radians to degrees
+}
 
 void setup() {
     Serial.begin(9600);
     delay(10);
-    //setupSPIFFS();
 
     calibrateJoystick();
 
@@ -100,18 +147,25 @@ void setup() {
     servo_a.write(35);
     servo_b.write(180-45);
     Serial.println("Servos set to  \n");
-    
     Serial.println("System started");
 
-    //grid = readLookupTable("/output1.csv");
+    //Serial print Alpha and Beta angles for testing
+    Eigen::Matrix3f R = calculate_R(0, 0);
+    Serial.println(alpha(0, 0, R));
+    Serial.println(beta(0, 0, R));
 
-    //Serial.printf("Read %d points from lookup table\n", grid.points.size() * grid.points[0].size());
-
+    servo_a.write(alpha(0, 0, R));
+    servo_b.write(180 + beta(0, 0, R));
 
 } 
 
 void loop() {
   
+  //offset controlls
+  float offset_a = 3;
+  float offset_b = -2;
+
+
   // read X and Y analog values
   int valueX = analogRead(VRX_PIN);
   int valueY = analogRead(VRY_PIN);
@@ -131,16 +185,18 @@ void loop() {
     calibratedY = mapFloat(valueY, minY, neutralY, -7.5, 0);
   }
 
-  servo_a.write(alpha(calibratedX, calibratedY));   
-  servo_b.write(180+beta(calibratedX, calibratedY));
+  // calculate rotation matrix
+  Eigen::Matrix3f R = calculate_R(calibratedX, calibratedY);
+  servo_a.write(alpha(calibratedX, calibratedY, R)-offset_a);   
+  servo_b.write(180+beta(calibratedX, calibratedY, R)-offset_b);
 
    // print data to Serial Monitor on Arduino IDE
   Serial.print(calibratedX, 2);  // print with 2 decimal places
   Serial.print(", ");
   Serial.print(calibratedY, 2);  // print with 2 decimal places
   Serial.print(",");
-  Serial.print(alpha(calibratedX, calibratedY), 2);  // print with 2 decimal places
+  Serial.print(alpha(calibratedX, calibratedY ,R), 2);  // print with 2 decimal places
   Serial.print(", ");
-  Serial.println(-1*beta(calibratedX, calibratedY), 2);  // print with 2 decimal places
-  delay(50);
+  Serial.println(-1*beta(calibratedX, calibratedY, R), 2);  // print with 2 decimal places
+  delay(200);
 }
