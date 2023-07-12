@@ -158,9 +158,6 @@ void setup() {
     servo_a.attach(13);
     servo_b.attach(12);
     delay(1000);
-    servo_a.write(35);
-    servo_b.write(180-45);
-    Serial.println("Servos set to  \n");
     Serial.println("System started");
 
     //Serial print Alpha and Beta angles for testing
@@ -170,7 +167,6 @@ void setup() {
 
     servo_a.write(alpha(0, 0, R));
     servo_b.write(180 + beta(0, 0, R));
-
 } 
 
 void loop() {
