@@ -20,6 +20,8 @@ Servo servo_b;
 #define VRX_PIN 34 // ESP32 pin GIOP36 (ADC0) connected to VRX pin
 #define VRY_PIN 35 // ESP32 pin GIOP39 (ADC0) connected to VRY pin
 
+#define CONTROL_PIN 33 //Pin to activate the servos
+
 int neutralX = 0; // to store the X-axis neutral position
 int neutralY = 0; // to store the Y-axis neutral position
 int minX = 4095;  // min X position during calibration
@@ -138,6 +140,18 @@ float beta(float psi, float phi, const Eigen::Matrix3f& R) {
 void setup() {
     Serial.begin(9600);
     delay(10);
+    pinMode(CONTROL_PIN, INPUT); // Setzen Sie den Pin als Eingang
+    if (digitalRead(CONTROL_PIN) == HIGH) { // Überprüfen Sie, ob der Pin HIGH ist
+      servo_a.attach(13);
+      servo_b.attach(12);
+      delay(1000);
+      servo_a.write(0); // Setzen Sie die Servos auf 0
+      servo_b.write(0);
+      Serial.println("System stopped by control pin");
+      delay(10000);
+      setup(); // Starten Sie das Setup erneut
+      return; // Beenden Sie das setup()
+    }
 
     calibrateJoystick();
 
@@ -187,16 +201,19 @@ void loop() {
 
   // calculate rotation matrix
   Eigen::Matrix3f R = calculate_R(calibratedX, calibratedY);
-  servo_a.write(alpha(calibratedX, calibratedY, R)-offset_a);   
-  servo_b.write(180+beta(calibratedX, calibratedY, R)-offset_b);
+  float alpha_value = alpha(calibratedX, calibratedY, R);
+  float beta_value = beta(calibratedX, calibratedY, R);
+  servo_a.write(alpha_value - offset_a);
+  servo_b.write(180 + beta_value - offset_b);
 
-   // print data to Serial Monitor on Arduino IDE
+  Serial.print("Joystick value X:");
   Serial.print(calibratedX, 2);  // print with 2 decimal places
-  Serial.print(", ");
+  Serial.print(", Y: ");
   Serial.print(calibratedY, 2);  // print with 2 decimal places
-  Serial.print(",");
-  Serial.print(alpha(calibratedX, calibratedY ,R), 2);  // print with 2 decimal places
-  Serial.print(", ");
-  Serial.println(-1*beta(calibratedX, calibratedY, R), 2);  // print with 2 decimal places
+  Serial.print(", Alpha:");
+  Serial.print(alpha_value, 2);  // print with 2 decimal places
+  Serial.print(", Beta:");
+  Serial.println(-1 * beta_value, 2);  // print with 2 decimal places
+
   delay(200);
 }
