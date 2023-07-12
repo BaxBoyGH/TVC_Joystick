@@ -141,6 +141,7 @@ void setup() {
     Serial.begin(9600);
     delay(10);
     pinMode(CONTROL_PIN, INPUT); // Setzen Sie den Pin als Eingang
+    delay(1500);
     if (digitalRead(CONTROL_PIN) == HIGH) { // Überprüfen Sie, ob der Pin HIGH ist
       servo_a.attach(13);
       servo_b.attach(12);
@@ -150,7 +151,6 @@ void setup() {
       Serial.println("System stopped by control pin");
       delay(10000);
       setup(); // Starten Sie das Setup erneut
-      return; // Beenden Sie das setup()
     }
 
     calibrateJoystick();
@@ -173,8 +173,7 @@ void loop() {
   
   //offset controlls
   float offset_a = 3;
-  float offset_b = -2;
-
+  float offset_b = 8;
 
   // read X and Y analog values
   int valueX = analogRead(VRX_PIN);
@@ -211,5 +210,5 @@ void loop() {
   Serial.print(", Beta:");
   Serial.println(-1 * beta_value, 2);  // print with 2 decimal places
 
-  delay(200);
+  //delay(20);
 }
