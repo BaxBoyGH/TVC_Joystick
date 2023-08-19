@@ -14,6 +14,13 @@
 #include <servo.h>
 #include <ArduinoEigenDense.h>
 
+#include <Wire.h>
+#include <VL53L0X.h>
+
+//initalize VL53L0X sensor
+VL53L0X tofSensor;
+
+
 Servo servo_a;
 Servo servo_b;
 
@@ -79,17 +86,17 @@ float mapFloat(float x, float in_min, float in_max, float out_min, float out_max
 //Angles calculated using parameters and alpha beta func
 
 // Adjusted parameters for alpha function
-Eigen::Vector3f a_0(-25, -5, 45);
-Eigen::Vector3f g_a(10, -5, 75);
-float l_a = 11.0;
-float c_a = 48.42;
+Eigen::Vector3f a_0(-23, 0, 45);
+Eigen::Vector3f g_a(10, -7.7, 75);
+float l_a = 12.5;
+float c_a = 45.32;
 bool sign_a = true;
 
 // Adjusted parameters for beta function
-Eigen::Vector3f b_0(-10, -25, 45);
-Eigen::Vector3f g_b(-10, 10, 110);
-float l_b = 11.0;
-float c_b = 77.7;
+Eigen::Vector3f b_0(-5, -23, 45);
+Eigen::Vector3f g_b(-12.7, 10, 110);
+float l_b = 12.5;
+float c_b = 79.9;
 bool sign_b = true;
 
 Eigen::Matrix3f calculate_R(float psi, float phi) {
@@ -139,12 +146,26 @@ float beta(float psi, float phi, const Eigen::Matrix3f& R) {
 
 void setup() {
     Serial.begin(9600);
+    while (!Serial); // Warten Sie, bis die serielle Verbindung hergestellt ist
+
+    Wire.begin(); 
     delay(10);
     pinMode(CONTROL_PIN, INPUT); // Setzen Sie den Pin als Eingang
     delay(1500);
-    if (digitalRead(CONTROL_PIN) == HIGH) { // Überprüfen Sie, ob der Pin HIGH ist
-      servo_a.attach(13);
-      servo_b.attach(12);
+    
+    if (!tofSensor.init()) {
+      Serial.println("Failed to initialize the TOF200C sensor!");
+      while (1); // Endlos-Schleife, um das Programm anzuhalten
+    } else {
+      Serial.println("TOF200C sensor initialized successfully!");
+    }
+    tofSensor.setTimeout(500); // Setze Timeout auf 500ms
+    tofSensor.startContinuous(50); // start continuous mode with 20ms delay between measurements
+
+
+    if (false) { // Überprüfen Sie, ob der Pin HIGH ist
+      servo_a.attach(12);
+      servo_b.attach(13);
       delay(1000);
       servo_a.write(0); // Setzen Sie die Servos auf 0
       servo_b.write(0);
@@ -153,10 +174,10 @@ void setup() {
       setup(); // Starten Sie das Setup erneut
     }
 
-    calibrateJoystick();
+    //calibrateJoystick();
 
-    servo_a.attach(13);
-    servo_b.attach(12);
+    servo_a.attach(12);
+    servo_b.attach(13);
     delay(1000);
     Serial.println("System started");
 
@@ -172,12 +193,19 @@ void setup() {
 void loop() {
   
   //offset controlls
-  float offset_a = 3;
-  float offset_b = 8;
+  float offset_a = -12;
+  float offset_b = -12;
 
   // read X and Y analog values
   int valueX = analogRead(VRX_PIN);
   int valueY = analogRead(VRY_PIN);
+
+  // Messen Sie die Entfernung:
+  uint16_t distance = tofSensor.readRangeContinuousMillimeters();
+  if (tofSensor.timeoutOccurred()) {
+    Serial.println("Sensor timeout!");
+  }
+
 
   // calibrate the values
   float calibratedX, calibratedY;
@@ -199,8 +227,9 @@ void loop() {
   float alpha_value = alpha(calibratedX, calibratedY, R);
   float beta_value = beta(calibratedX, calibratedY, R);
   servo_a.write(alpha_value - offset_a);
-  servo_b.write(180 + beta_value - offset_b);
+  servo_b.write(135 + beta_value - offset_b);
 
+  // print values
   Serial.print("Joystick value X:");
   Serial.print(calibratedX, 2);  // print with 2 decimal places
   Serial.print(", Y: ");
@@ -208,7 +237,10 @@ void loop() {
   Serial.print(", Alpha:");
   Serial.print(alpha_value, 2);  // print with 2 decimal places
   Serial.print(", Beta:");
-  Serial.println(-1 * beta_value, 2);  // print with 2 decimal places
+  Serial.print(-1 * beta_value, 2);  // print with 2 decimal places
+  Serial.print(", Distance: ");
+  Serial.print(tofSensor.readRangeContinuousMillimeters());
+  Serial.println("mm");
 
-  //delay(20);
+  delay(10);
 }
