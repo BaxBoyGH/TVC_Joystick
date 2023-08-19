@@ -20,7 +20,6 @@
 //initalize VL53L0X sensor
 VL53L0X tofSensor;
 
-
 Servo servo_a;
 Servo servo_b;
 
@@ -42,7 +41,6 @@ struct Point {
     double mappedX;
     double mappedY;
 };
-
 
 void calibrateJoystick() {
   Serial.println("Please keep the joystick still for 5 seconds");
@@ -144,6 +142,7 @@ float beta(float psi, float phi, const Eigen::Matrix3f& R) {
     return 2 * atan((x[1] + pm * sqrt(sqrt_val)) / denominator) * 180.0 / M_PI; // convert result from radians to degrees
 }
 
+
 void setup() {
     Serial.begin(9600);
     while (!Serial); // Warten Sie, bis die serielle Verbindung hergestellt ist
@@ -174,7 +173,7 @@ void setup() {
       setup(); // Starten Sie das Setup erneut
     }
 
-    //calibrateJoystick();
+    calibrateJoystick();
 
     servo_a.attach(12);
     servo_b.attach(13);
