@@ -2,7 +2,6 @@
 #include <Servo.h>
 #include <ArduinoEigenDense.h>
 
-
 Servo servo_a;
 Servo servo_b;
 
