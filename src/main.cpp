@@ -1,18 +1,7 @@
 #include <Arduino.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <float.h>
-#include <SPIFFS.h>
-#include "FS.h"
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <vector>
-#include <string>
-#include <cmath>
-#include <servo.h>
+#include <Servo.h>
 #include <ArduinoEigenDense.h>
+
 
 Servo servo_a;
 Servo servo_b;
