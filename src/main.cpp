@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <Servo.h>
 #include <ArduinoEigenDense.h>
+#include <iostream>
+#include <wire.h>
 
 Servo servo_a;
 Servo servo_b;
@@ -64,18 +66,80 @@ float beta(float psi, float phi, const Eigen::Matrix3f& R) {
     return 2 * atan((x[1] + pm * sqrt(sqrt_val)) / denominator) * 180.0 / M_PI; // convert result from radians to degrees
 }
 
-// Global offset variables
-float offset_alpha = -25; // Adjust this value based on your needs
-float offset_beta = -35;  // Adjust this value based on your needs
+//kalibration of Servos
+const int CONTROL_PIN = 5; // G5 pin on the ESP32
+float stepSize = 0.5;      // Global variable for step size
+int delayTime = 500;      // Global variable for delay time
 
+void calibrateServos(Servo& servoA, Servo& servoB) {
+    
+    while (digitalRead(CONTROL_PIN) == LOW) { // Wait until G5 is set back to high
+        Serial.println("Please set G5 to high again! Waiting.");
+        delay(250);
+    }
+
+    Serial.println("Starting calibration for Sero Alpha...");
+    // Calibration for servo A (alpha)
+    servoA.write(0);
+    delay(delayTime);
+    for(float angle = 0; angle <= 180; angle += stepSize) {
+        Serial.println(angle);
+        if (digitalRead(CONTROL_PIN) == LOW) { // Check if the pin is shorted to ground
+            Serial.println("Servo A collision detected!");
+            break;
+        }
+        servoA.write(angle);
+        delay(delayTime);
+    }
+    float alphaCollisionAngle = servoA.read(); // Store the angle at which collision was detected
+    Serial.println("Waiting for G5 to be set back to high...");
+    while (digitalRead(CONTROL_PIN) == LOW) { // Wait until G5 is set back to high
+        delay(100);
+    }
+
+    // Calibration for servo B (beta)
+    Serial.println("Starting calibration for Sero Beta...");
+    servoB.write(160);
+    delay(delayTime);
+    for(float angle = 160; angle >= 0; angle -= stepSize) {
+        Serial.println(angle);
+        if (digitalRead(CONTROL_PIN) == LOW) { // Check if the pin is shorted to ground
+            Serial.println("Servo B collision detected!");
+            break;
+        }
+        servoB.write(angle);
+        delay(delayTime);
+    }
+    float betaCollisionAngle = servoB.read(); // Store the angle at which collision was detected
+
+    // Compute the offsets based on known collision angles
+    float alphaOffset = alphaCollisionAngle - 50;
+    float betaOffset = betaCollisionAngle - 125;
+
+    // Print the angles at which collisions were detected and the computed offsets
+    Serial.print("Alpha collision angle: ");
+    Serial.println(alphaCollisionAngle);
+    Serial.print("Alpha offset: ");
+    Serial.println(alphaOffset);
+    Serial.print("Beta collision angle: ");
+    Serial.println(betaCollisionAngle);
+    Serial.print("Beta offset: ");
+    Serial.println(betaOffset);
+}
+
+
+// Global offset variables
+float offset_alpha = 15; // Adjust this value based on your needs
+float offset_beta = -25;  // Adjust this value based on your needs
 
 void setup() {
-    Serial.begin(9600);
+    Serial.begin(115200);
     delay(1000);  // Give a delay for the serial connection to establish
     Serial.println("Starting system setup...");
     
     servo_a.attach(12);
     servo_b.attach(13);
+    pinMode(CONTROL_PIN, INPUT_PULLUP); // Set CONTROL_PIN as input with pullup resistor
     delay(1000);
     Serial.println("Servos attached.");
 
@@ -84,7 +148,27 @@ void setup() {
     Serial.println("Setting initial angles...");
     servo_a.write(alpha(0, 0, R) + offset_alpha);
     servo_b.write(160 + beta(0, 0, R) + offset_beta);
-    Serial.println("Initial angles set. Waiting for Serial..");
+    //print alpha(0,0T and Beta(0,0,R values and the offset values and the final Value
+    Serial.print("Alpha(0,0,R): ");
+    Serial.println(alpha(0, 0, R));
+    Serial.print("Beta(0,0,R): ");
+    Serial.println(beta(0, 0, R));
+    Serial.print("Alpha offset: ");
+    Serial.println(offset_alpha);
+    Serial.print("Beta offset: ");
+    Serial.println(offset_beta);
+    Serial.print("Alpha(0,0,R) + offset_alpha: ");
+    Serial.println(alpha(0, 0, R) + offset_alpha);
+    Serial.print("Beta(0,0,R) + offset_beta: ");
+    Serial.println(160 + beta(0, 0, R) + offset_beta);
+
+    Serial.println("Waiting 10 seconds, for calibration mode put G5 Low.");
+    delay(10000);
+
+    if (digitalRead(CONTROL_PIN) == LOW) { // Check if the pin is shorted to ground
+            Serial.println("Calibration Mode activated!");
+            calibrateServos(servo_a, servo_b);
+        }
 
 }
 
