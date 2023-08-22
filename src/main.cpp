@@ -68,8 +68,8 @@ float beta(float psi, float phi, const Eigen::Matrix3f& R) {
 
 //kalibration of Servos
 const int CONTROL_PIN = 5; // G5 pin on the ESP32
-float stepSize = 0.5;      // Global variable for step size
-int delayTime = 500;      // Global variable for delay time
+float stepSize = 0.25;      // Global variable for step size
+int delayTime = 250;      // Global variable for delay time
 
 void calibrateServos(Servo& servoA, Servo& servoB) {
     
@@ -83,6 +83,7 @@ void calibrateServos(Servo& servoA, Servo& servoB) {
     servoA.write(0);
     delay(delayTime);
     for(float angle = 0; angle <= 180; angle += stepSize) {
+        Serial.print("Alpha-Angle: ");
         Serial.println(angle);
         if (digitalRead(CONTROL_PIN) == LOW) { // Check if the pin is shorted to ground
             Serial.println("Servo A collision detected!");
@@ -102,6 +103,7 @@ void calibrateServos(Servo& servoA, Servo& servoB) {
     servoB.write(160);
     delay(delayTime);
     for(float angle = 160; angle >= 0; angle -= stepSize) {
+        Serial.print("Beta-Angle: ");
         Serial.println(angle);
         if (digitalRead(CONTROL_PIN) == LOW) { // Check if the pin is shorted to ground
             Serial.println("Servo B collision detected!");
