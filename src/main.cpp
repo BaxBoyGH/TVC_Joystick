@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <Servo.h>
 #include <ArduinoEigenDense.h>
-#include <iostream>
 #include <wire.h>
 
 Servo servo_a;
@@ -38,13 +37,13 @@ float alpha(float psi, float phi, const Eigen::Matrix3f& R) {
     int pm = sign_a ? 1 : -1;
     float denominator = z + x[2];
     if (denominator == 0) { // avoid division by zero
-        std::cout << "Denominator in alpha calculation is zero!" << std::endl;
-        return std::nan("");
+        Serial.println("Denominator in alpha calculation is zero!");
+        return NULL;
     }
     float sqrt_val = x[0] * x[0] + x[2] * x[2] - z * z;
     if (sqrt_val < 0) { // check if value inside sqrt is negative
-        std::cout << "Negative value inside sqrt in alpha calculation!" << std::endl;
-        return std::nan("");
+        Serial.println("Negative value inside sqrt in alpha calculation!");
+        return NULL;
     }
     return -2 * atan((x[0] + pm * sqrt(sqrt_val)) / denominator) * 180.0 / M_PI; // convert result from radians to degrees
 }
@@ -55,13 +54,13 @@ float beta(float psi, float phi, const Eigen::Matrix3f& R) {
     int pm = sign_b ? 1 : -1;
     float denominator = z + x[2];
     if (denominator == 0) { // avoid division by zero
-        std::cout << "Denominator in beta calculation is zero!" << std::endl;
-        return std::nan("");
+        Serial.println("Denominator in beta calculation is zero!");
+        return NULL;
     }
     float sqrt_val = x[1] * x[1] + x[2] * x[2] - z * z;
     if (sqrt_val < 0) { // check if value inside sqrt is negative
-        std::cout << "Negative value inside sqrt in beta calculation!" << std::endl;
-        return std::nan("");
+        Serial.println("Negative value inside sqrt in beta calculation!");
+        return NULL;
     }
     return 2 * atan((x[1] + pm * sqrt(sqrt_val)) / denominator) * 180.0 / M_PI; // convert result from radians to degrees
 }
@@ -77,7 +76,7 @@ void calibrateServos(Servo& servoA, Servo& servoB) {
         Serial.println("Please set G5 to high again! Waiting.");
         delay(250);
     }
-
+    delay(1000); // Wait for 1 second to make sure the pin is not shorted to ground
     Serial.println("Starting calibration for Sero Alpha...");
     // Calibration for servo A (alpha)
     servoA.write(0);
@@ -89,7 +88,9 @@ void calibrateServos(Servo& servoA, Servo& servoB) {
             Serial.println("Servo A collision detected!");
             break;
         }
-        servoA.write(angle);
+        //Map the Angles 0-160 to 900-2100us for the Servo.writeMicroseconds function
+        angle = map(angle, 0, 160, 900, 2100);
+        servo_a.writeMicroseconds(angle);
         delay(delayTime);
     }
     float alphaCollisionAngle = servoA.read(); // Store the angle at which collision was detected
@@ -97,6 +98,7 @@ void calibrateServos(Servo& servoA, Servo& servoB) {
     while (digitalRead(CONTROL_PIN) == LOW) { // Wait until G5 is set back to high
         delay(100);
     }
+    delay(1000); // Wait for 1 second to make sure the pin is not shorted to ground
 
     // Calibration for servo B (beta)
     Serial.println("Starting calibration for Sero Beta...");
@@ -109,7 +111,9 @@ void calibrateServos(Servo& servoA, Servo& servoB) {
             Serial.println("Servo B collision detected!");
             break;
         }
-        servoB.write(angle);
+        //Map the Angles 0-160 to 900-2100us for the Servo.writeMicroseconds function
+        angle = map(angle, 0, 160, 900, 2100);
+        servo_b.writeMicroseconds(angle);
         delay(delayTime);
     }
     float betaCollisionAngle = servoB.read(); // Store the angle at which collision was detected
@@ -131,8 +135,8 @@ void calibrateServos(Servo& servoA, Servo& servoB) {
 
 
 // Global offset variables
-float offset_alpha = 15; // Adjust this value based on your needs
-float offset_beta = -25;  // Adjust this value based on your needs
+float offset_alpha = 22; // Adjust this value based on your needs
+float offset_beta = -18;  // Adjust this value based on your needs
 
 void setup() {
     Serial.begin(115200);
@@ -144,6 +148,10 @@ void setup() {
     pinMode(CONTROL_PIN, INPUT_PULLUP); // Set CONTROL_PIN as input with pullup resistor
     delay(1000);
     Serial.println("Servos attached.");
+    //Servo to zero Postion 
+    servo_a.write(0);
+    servo_b.write(160);
+    delay(2000);
 
     // Initial angle setting
     Eigen::Matrix3f R = calculate_R(0, 0);
@@ -164,14 +172,14 @@ void setup() {
     Serial.print("Beta(0,0,R) + offset_beta: ");
     Serial.println(160 + beta(0, 0, R) + offset_beta);
 
-    Serial.println("Waiting 10 seconds, for calibration mode put G5 Low.");
-    delay(10000);
+    Serial.println("Waiting, set G5 to Low for calibration mode (short to ground)");
 
-    if (digitalRead(CONTROL_PIN) == LOW) { // Check if the pin is shorted to ground
-            Serial.println("Calibration Mode activated!");
-            calibrateServos(servo_a, servo_b);
-        }
+    while(digitalRead(CONTROL_PIN) == HIGH) { // Wait until G5 is set back to high
+        delay(100);
+    }
 
+    Serial.println("Calibration Mode activated!");
+    calibrateServos(servo_a, servo_b);
 }
 
 void loop() {
